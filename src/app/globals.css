@@ -1,21 +1,60 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fff7ed;
+  --foreground: #1a1a1a;
+  --primary: #ea580c;
+  --primary-foreground: #ffffff;
+  --secondary: #fed7aa;
+  --secondary-foreground: #7c2d12;
+  --accent: #fb923c;
+  --accent-foreground: #ffffff;
+  --muted: #fef3e2;
+  --muted-foreground: #9a3412;
+  --border: #fdba74;
+  --input: #ffffff;
+  --ring: #ea580c;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a0e0a;
+    --foreground: #fef3e2;
+    --primary: #fb923c;
+    --primary-foreground: #1a0e0a;
+    --secondary: #7c2d12;
+    --secondary-foreground: #fed7aa;
+    --accent: #ea580c;
+    --accent-foreground: #ffffff;
+    --muted: #2d1b13;
+    --muted-foreground: #fdba74;
+    --border: #7c2d12;
+    --input: #2d1b13;
+    --ring: #fb923c;
   }
 }
 
