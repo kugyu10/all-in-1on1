@@ -4,8 +4,9 @@ import { useSession } from "next-auth/react";
 // import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
-// import { useMutation } from "convex/react";
-// import { api } from "@/convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createMeetingSchema, CreateMeetingInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,14 @@ export default function CreateMeeting() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState<{ id: string; summary: string; start: { dateTime: string }; end: { dateTime: string } }[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
-  const [createdMeetingId, setCreatedMeetingId] = useState<string | null>(null);
-  // const createMeeting = useMutation(api.meetings.create);
+  const [createdMeetingId, setCreatedMeetingId] = useState<Id<"meetings"> | null>(null);
+  const createMeeting = useMutation(api.meetings.create);
+  
+  // ユーザー情報を取得
+  const currentUser = useQuery(
+    api.users.getByEmail,
+    session?.user?.email ? { email: session.user.email } : "skip"
+  );
 
   const {
     register,
@@ -47,22 +54,23 @@ export default function CreateMeeting() {
   const watchedMeetingType = useWatch({ control, name: "meetingType" });
 
   const onSubmit = async (data: CreateMeetingInput) => {
+    if (!currentUser) {
+      alert("ユーザー情報が見つかりません。ログインし直してください。");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       console.log("Creating meeting:", data);
       
-      // デモ用の仮のミーティングID生成
-      const meetingId = `meeting_${Date.now()}`;
-      
-      // 実際の実装では、ここでConvexのcreateMeetingを呼び出す
-      // const meetingId = await createMeeting({
-      //   title: data.title,
-      //   description: data.description,
-      //   duration: data.duration,
-      //   meetingType: data.meetingType,
-      //   businessHours: data.businessHours,
-      //   ownerId: session?.user?.id,
-      // });
+      const meetingId = await createMeeting({
+        title: data.title,
+        description: data.description,
+        duration: data.duration,
+        meetingType: data.meetingType,
+        businessHours: data.businessHours,
+        ownerId: currentUser._id,
+      });
       
       setCreatedMeetingId(meetingId);
       console.log("Meeting created with ID:", meetingId);

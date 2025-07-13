@@ -7,6 +7,7 @@ export default defineSchema({
     email: v.string(),
     googleId: v.optional(v.string()),
     profileImage: v.optional(v.string()),
+    profileText: v.optional(v.string()),
     isOwner: v.boolean(),
     createdAt: v.number(),
   }).index("by_email", ["email"]).index("by_googleId", ["googleId"]),

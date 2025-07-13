@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { Header } from "@/components/header";
+import { UserSync } from "@/components/user-sync";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +35,8 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <Providers>
+            <UserSync />
+            <Header />
             {children}
           </Providers>
         </ErrorBoundary>

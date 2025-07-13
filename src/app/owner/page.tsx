@@ -1,21 +1,26 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar, Plus, Settings, Clock, Users, Video } from "lucide-react";
 import Link from "next/link";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 export default function OwnerDashboard() {
   const { data: session } = useSession();
-  const [meetings] = useState<{
-    id: string;
-    title: string;
-    duration: number;
-    meetingType: string;
-    bookings: number;
-    isActive: boolean;
-  }[]>([]);
+  
+  // ユーザー情報を取得
+  const currentUser = useQuery(
+    api.users.getByEmail,
+    session?.user?.email ? { email: session.user.email } : "skip"
+  );
+  
+  // ユーザーのミーティングを取得
+  const meetings = useQuery(
+    api.meetings.getByOwner,
+    currentUser ? { ownerId: currentUser._id } : "skip"
+  ) || [];
 
   if (!session) {
     return (
@@ -29,9 +34,8 @@ export default function OwnerDashboard() {
 
   return (
     <div className="min-h-screen bg-orange-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Calendar className="h-8 w-8 text-orange-600" />
@@ -40,40 +44,21 @@ export default function OwnerDashboard() {
                 <p className="text-gray-600">ミーティングタイプを管理し、予約を確認</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/participants">
-                <Button variant="outline" className="flex items-center space-x-2">
-                  <Users className="h-4 w-4" />
-                  <span>参加者ビューに切り替え</span>
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2">
-                {session.user?.image ? (
-                  <img
-                    src={session.user.image}
-                    alt={session.user?.name || "User"}
-                    className="h-8 w-8 rounded-full"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                    <span className="text-xs text-gray-600">{session.user?.name?.charAt(0) || "U"}</span>
-                  </div>
-                )}
-                <span className="text-sm text-gray-700">{session.user?.name}</span>
-              </div>
-            </div>
+            <Link href="/participants">
+              <Button variant="outline" className="flex items-center space-x-2">
+                <Users className="h-4 w-4" />
+                <span>参加者ビューに切り替え</span>
+              </Button>
+            </Link>
           </div>
         </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">アクティブなミーティングタイプ</p>
-                <p className="text-3xl font-bold text-gray-900">{meetings.filter(m => m.isActive).length}</p>
+<p className="text-3xl font-bold text-gray-900">{meetings.length}</p>
               </div>
               <Calendar className="h-8 w-8 text-orange-600" />
             </div>
@@ -83,7 +68,7 @@ export default function OwnerDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">今月の予約数</p>
-                <p className="text-3xl font-bold text-gray-900">{meetings.reduce((sum, m) => sum + m.bookings, 0)}</p>
+                <p className="text-3xl font-bold text-gray-900">0</p>
               </div>
               <Users className="h-8 w-8 text-green-600" />
             </div>
@@ -94,7 +79,7 @@ export default function OwnerDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">平均ミーティング時間</p>
                 <p className="text-3xl font-bold text-gray-900">
-                  {Math.round(meetings.reduce((sum, m) => sum + m.duration, 0) / meetings.length)}分
+                  {meetings.length > 0 ? Math.round(meetings.reduce((sum, m) => sum + m.duration, 0) / meetings.length) : 0}分
                 </p>
               </div>
               <Clock className="h-8 w-8 text-blue-600" />
@@ -149,7 +134,7 @@ export default function OwnerDashboard() {
           {meetings.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {meetings.map((meeting) => (
-                <div key={meeting.id} className="bg-white rounded-lg shadow-lg p-6">
+                <div key={meeting._id} className="bg-white rounded-lg shadow-lg p-6">
                   <div className="flex items-start justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">{meeting.title}</h3>
                     <div className="flex items-center space-x-2">
@@ -178,7 +163,7 @@ export default function OwnerDashboard() {
 
                     <div className="flex items-center space-x-2">
                       <Users className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">{meeting.bookings}件の予約</span>
+                      <span className="text-sm text-gray-600">0件の予約</span>
                     </div>
                   </div>
 
@@ -190,7 +175,7 @@ export default function OwnerDashboard() {
                       size="sm" 
                       variant="outline" 
                       onClick={() => {
-                        const url = `${window.location.origin}/book/${meeting.id}`;
+                        const url = `${window.location.origin}/book/${meeting._id}`;
                         navigator.clipboard.writeText(url);
                         alert("予約URLをクリップボードにコピーしました！");
                       }}

@@ -17,7 +17,19 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions) as SessionWithAccessToken;
     
+    console.log("Calendar API - Session check:", {
+      hasSession: !!session,
+      hasAccessToken: !!session?.accessToken,
+      userEmail: session?.user?.email
+    });
+    
+    if (!session) {
+      console.error("Calendar API - No session found");
+      return NextResponse.json({ error: 'No session available' }, { status: 401 });
+    }
+    
     if (!session?.accessToken) {
+      console.error("Calendar API - No access token in session");
       return NextResponse.json({ error: 'No access token available' }, { status: 401 });
     }
 
@@ -41,6 +53,12 @@ export async function GET(request: NextRequest) {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+    console.log("Calendar API - Attempting to fetch events:", {
+      calendarId: 'primary',
+      timeMin: startDate,
+      timeMax: endDate
+    });
+
     const response = await calendar.events.list({
       calendarId: 'primary',
       timeMin: startDate,
@@ -48,6 +66,8 @@ export async function GET(request: NextRequest) {
       singleEvents: true,
       orderBy: 'startTime',
     });
+
+    console.log("Calendar API - Successfully fetched events:", response.data.items?.length || 0);
 
     const events = response.data.items || [];
     
@@ -61,7 +81,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ events: formattedEvents });
   } catch (error) {
-    console.error('Calendar API error:', error);
-    return NextResponse.json({ error: 'Failed to fetch calendar events' }, { status: 500 });
+    console.error('Calendar API error - Full details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error: error
+    });
+    return NextResponse.json({ 
+      error: 'Failed to fetch calendar events',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

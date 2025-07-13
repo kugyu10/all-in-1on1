@@ -3,6 +3,7 @@ declare module "next-auth" {
     accessToken?: string
     user: {
       id: string
+      convexId?: string
       name?: string | null
       email?: string | null
       image?: string | null

@@ -49,9 +49,8 @@ export default function ParticipantsDashboard() {
 
   return (
     <div className="min-h-screen bg-orange-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Users className="h-8 w-8 text-blue-600" />
@@ -60,33 +59,14 @@ export default function ParticipantsDashboard() {
                 <p className="text-gray-600">ミーティングを検索・予約し、予定を管理</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/owner">
-                <Button variant="outline" className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>オーナービューに切り替え</span>
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2">
-                {session.user?.image ? (
-                  <img
-                    src={session.user.image}
-                    alt={session.user?.name || "User"}
-                    className="h-8 w-8 rounded-full"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                    <span className="text-xs text-gray-600">{session.user?.name?.charAt(0) || "U"}</span>
-                  </div>
-                )}
-                <span className="text-sm text-gray-700">{session.user?.name}</span>
-              </div>
-            </div>
+            <Link href="/owner">
+              <Button variant="outline" className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4" />
+                <span>オーナービューに切り替え</span>
+              </Button>
+            </Link>
           </div>
         </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-lg p-6">

@@ -3,8 +3,9 @@
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import React from "react";
-// import { useQuery } from "convex/react";
-// import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Video, User, Mail, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -14,6 +15,7 @@ import { bookMeetingSchema, BookMeetingInput } from "@/lib/validations";
 export default function BookMeeting() {
   const params = useParams();
   const meetingId = params.meetingId as string;
+  const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<number | null>(null);
   const [bookingComplete, setBookingComplete] = useState(false);
@@ -34,20 +36,16 @@ export default function BookMeeting() {
   }[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
 
-  // const meeting = useQuery(api.meetings.getById, { meetingId: meetingId as any });
+  const meeting = useQuery(api.meetings.getById, { meetingId: meetingId as any });
   
-  // デモ用の仮データ
-  const meeting = {
-    id: meetingId,
-    title: "30分チャット",
-    description: "気軽にお話ししましょう",
-    duration: 30,
-    meetingType: "google_meet" as const,
-    ownerId: "demo_owner",
-    businessHours: {},
-    isActive: true,
-    createdAt: Date.now()
-  };
+  // ミーティングオーナーの情報を取得
+  const meetingOwner = useQuery(
+    api.users.getById, 
+    meeting?.ownerId ? { id: meeting.ownerId } : "skip"
+  );
+  
+  // 現在のユーザーがオーナーかどうかをチェック
+  const isOwner = session?.user?.email && meetingOwner?.email === session.user.email;
 
   const {
     register,
@@ -82,6 +80,15 @@ export default function BookMeeting() {
   const fetchOwnerCalendar = React.useCallback(async () => {
     setIsLoadingCalendar(true);
     try {
+      // セッション情報をログ出力
+      const sessionResponse = await fetch('/api/auth/session');
+      const sessionData = await sessionResponse.json();
+      console.log("Client - Session data:", {
+        hasSession: !!sessionData,
+        hasAccessToken: !!sessionData?.accessToken,
+        userEmail: sessionData?.user?.email
+      });
+
       const weekStart = new Date(currentWeekStart);
       const weekEnd = new Date(currentWeekStart);
       weekEnd.setDate(weekStart.getDate() + 7);
@@ -89,7 +96,9 @@ export default function BookMeeting() {
       const response = await fetch(`/api/calendar/events?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch calendar events');
+        const errorData = await response.json();
+        console.error("Calendar API response error:", errorData);
+        throw new Error(`Failed to fetch calendar events: ${errorData.details || errorData.error || response.statusText}`);
       }
 
       const data = await response.json();
@@ -133,33 +142,60 @@ export default function BookMeeting() {
     });
   };
 
-  // デモ用の利用可能時間スロット生成
+  // 利用可能時間スロット生成
   const generateTimeSlots = () => {
     const slots: {
       time: Date;
       available: boolean;
       blockedReason: string | null;
     }[] = [];
+    
+    if (!meeting || !meeting.businessHours) {
+      return slots;
+    }
+    
     const weekDays = getWeekDays();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     
     weekDays.forEach((day, dayIndex) => {
-      // 平日のみ（月〜金）
-      if (dayIndex < 5) {
-        // 9:00-17:00の間で30分刻み
-        for (let hour = 9; hour < 17; hour++) {
-          for (let minute = 0; minute < 60; minute += 30) {
-            const slotTime = new Date(day);
-            slotTime.setHours(hour, minute, 0, 0);
-            
-            // 過去の時間は除外
-            if (slotTime > new Date()) {
-              const isBlocked = isTimeSlotBlocked(slotTime, meeting.duration);
-              slots.push({
-                time: slotTime,
-                available: !isBlocked, // オーナーの予定があれば利用不可
-                blockedReason: isBlocked ? "オーナーの予定" : null,
-              });
-            }
+      const dayName = dayNames[day.getDay()];
+      const daySettings = meeting.businessHours[dayName];
+      
+      // 営業日でない場合はスキップ
+      if (!daySettings || !daySettings.enabled || !daySettings.startTime || !daySettings.endTime) {
+        return;
+      }
+      
+      // 営業時間の範囲でスロットを生成
+      const startHour = parseInt(daySettings.startTime.split(':')[0]);
+      const startMinute = parseInt(daySettings.startTime.split(':')[1]);
+      const endHour = parseInt(daySettings.endTime.split(':')[0]);
+      const endMinute = parseInt(daySettings.endTime.split(':')[1]);
+      
+      // 30分刻みでスロットを生成
+      for (let hour = startHour; hour <= endHour; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          // 終了時間を超える場合はスキップ
+          if (hour === endHour && minute >= endMinute) {
+            break;
+          }
+          
+          // 開始時間より前の場合はスキップ
+          if (hour === startHour && minute < startMinute) {
+            continue;
+          }
+          
+          const slotTime = new Date(day);
+          slotTime.setHours(hour, minute, 0, 0);
+          
+          // 過去の時間は除外
+          if (slotTime > new Date()) {
+            const isBlocked = isTimeSlotBlocked(slotTime, meeting.duration || 30);
+            slots.push({
+              time: slotTime,
+              available: !isBlocked,
+              blockedReason: isBlocked ? "オーナーの予定" : null,
+            });
           }
         }
       }
@@ -169,6 +205,29 @@ export default function BookMeeting() {
   };
 
   const timeSlots = generateTimeSlots();
+
+  // 営業時間の最大終了時間を計算
+  const getMaxEndHour = () => {
+    if (!meeting?.businessHours) return 17;
+    
+    let maxHour = 9;
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    
+    dayNames.forEach(dayName => {
+      const daySettings = meeting.businessHours[dayName];
+      if (daySettings?.enabled && daySettings?.endTime) {
+        const endHour = parseInt(daySettings.endTime.split(':')[0]);
+        if (endHour > maxHour) {
+          maxHour = endHour;
+        }
+      }
+    });
+    
+    return maxHour;
+  };
+
+  const maxEndHour = getMaxEndHour();
+  const totalSlots = (maxEndHour - 9 + 1) * 2; // 9時からmaxEndHourまで、30分刻み
 
   const onSubmit = async (data: BookMeetingInput) => {
     if (!selectedTimeSlot) {
@@ -318,7 +377,7 @@ export default function BookMeeting() {
                 ))}
 
                 {/* 時間スロットグリッド */}
-                {Array.from({ length: 16 }, (_, hourIndex) => {
+                {Array.from({ length: totalSlots }, (_, hourIndex) => {
                   const hour = 9 + Math.floor(hourIndex / 2);
                   const minute = (hourIndex % 2) * 30;
                   const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -342,6 +401,12 @@ export default function BookMeeting() {
                         const isWeekend = dayIndex >= 5;
                         const isBlocked = slot?.blockedReason;
                         
+                        // 営業時間外かどうかをチェック
+                        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                        const dayName = dayNames[day.getDay()];
+                        const daySettings = meeting?.businessHours?.[dayName];
+                        const isOutsideBusinessHours = !slot && daySettings?.enabled && slotTime > new Date();
+                        
                         return (
                           <div key={dayIndex} className="relative">
                             {isAvailable ? (
@@ -364,6 +429,8 @@ export default function BookMeeting() {
                                     ? "bg-gray-50 border-gray-200"
                                     : isBlocked
                                     ? "bg-blue-50 border-blue-200"
+                                    : isOutsideBusinessHours
+                                    ? "bg-yellow-50 border-yellow-200"
                                     : "bg-red-50 border-red-200"
                                 }`}
                                 title={isBlocked ? `${isBlocked}: ${slot?.blockedReason}` : undefined}
@@ -371,7 +438,8 @@ export default function BookMeeting() {
                                 <div className="flex items-center justify-center h-full text-xs text-gray-400">
                                   {isWeekend ? "休日" : 
                                    slotTime <= new Date() ? "過去" : 
-                                   isBlocked ? "予定有" : "予約済"}
+                                   isBlocked ? "予定有" : 
+                                   isOutsideBusinessHours ? "時間外" : "予約済"}
                                 </div>
                               </div>
                             )}
@@ -384,7 +452,7 @@ export default function BookMeeting() {
               </div>
 
               {/* 凡例 */}
-              <div className="mt-4 flex items-center justify-center space-x-6 text-xs">
+              <div className="mt-4 flex items-center justify-center space-x-4 text-xs flex-wrap">
                 <div className="flex items-center space-x-1">
                   <div className="w-3 h-3 bg-green-50 border border-green-200 rounded"></div>
                   <span className="text-gray-600">空き</span>
@@ -396,6 +464,10 @@ export default function BookMeeting() {
                 <div className="flex items-center space-x-1">
                   <div className="w-3 h-3 bg-blue-50 border border-blue-200 rounded"></div>
                   <span className="text-gray-600">オーナー予定有</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-yellow-50 border border-yellow-200 rounded"></div>
+                  <span className="text-gray-600">時間外</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <div className="w-3 h-3 bg-red-50 border border-red-200 rounded"></div>
@@ -462,30 +534,40 @@ export default function BookMeeting() {
                 )}
               </div>
 
-              <Button
-                type="submit"
-                disabled={isSubmitting || !selectedTimeSlot}
-                className="w-full flex items-center justify-center space-x-2"
-                size="lg"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>予約中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Calendar className="h-4 w-4" />
-                    <span>ミーティングを予約する</span>
-                  </>
+              <div className="relative">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || !selectedTimeSlot || isOwner}
+                  className="w-full flex items-center justify-center space-x-2"
+                  size="lg"
+                  title={isOwner ? "自分のミーティングは予約できません" : undefined}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>予約中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="h-4 w-4" />
+                      <span>ミーティングを予約する</span>
+                    </>
+                  )}
+                </Button>
+                {isOwner && (
+                  <div className="absolute inset-0 cursor-not-allowed" title="自分のミーティングは予約できません" />
                 )}
-              </Button>
+              </div>
 
-              {!selectedTimeSlot && (
+              {isOwner ? (
+                <p className="text-sm text-amber-600 text-center font-medium">
+                  自分のミーティングタイプは予約できません
+                </p>
+              ) : !selectedTimeSlot ? (
                 <p className="text-sm text-gray-500 text-center">
                   時間帯を選択してから予約してください
                 </p>
-              )}
+              ) : null}
             </form>
           </div>
         </div>
