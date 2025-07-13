@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import React from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ export default function BookMeeting() {
   // 現在のユーザーがオーナーかどうかをチェック
   const isOwner = session?.user?.email && meetingOwner?.email === session.user.email;
 
+  // 予約用のmutation
+  const bookSlot = useMutation(api.meetings.bookSlot);
+
   const {
     register,
     handleSubmit,
@@ -78,30 +81,42 @@ export default function BookMeeting() {
 
   // オーナーのカレンダーデータを取得する関数
   const fetchOwnerCalendar = React.useCallback(async () => {
+    if (!meetingId) {
+      console.log("No meetingId available, skipping calendar fetch");
+      return;
+    }
+
     setIsLoadingCalendar(true);
     try {
-      // セッション情報をログ出力
-      const sessionResponse = await fetch('/api/auth/session');
-      const sessionData = await sessionResponse.json();
-      console.log("Client - Session data:", {
-        hasSession: !!sessionData,
-        hasAccessToken: !!sessionData?.accessToken,
-        userEmail: sessionData?.user?.email
-      });
+      console.log("Fetching calendar for meeting:", meetingId);
 
       const weekStart = new Date(currentWeekStart);
       const weekEnd = new Date(currentWeekStart);
       weekEnd.setDate(weekStart.getDate() + 7);
 
-      const response = await fetch(`/api/calendar/events?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`);
+      const url = `/api/calendar/events?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}&meetingId=${meetingId}`;
+      console.log("Calendar API URL:", url);
+
+      const response = await fetch(url);
+      
+      console.log("Calendar API response status:", response.status);
       
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Calendar API response error:", errorData);
+        
+        // エラーがあってもアプリケーションを止めない
+        if (response.status === 401 || response.status === 404) {
+          console.log("Calendar access not available, continuing without calendar data");
+          setOwnerCalendarEvents([]);
+          return;
+        }
+        
         throw new Error(`Failed to fetch calendar events: ${errorData.details || errorData.error || response.statusText}`);
       }
 
       const data = await response.json();
+      console.log("Calendar API response data:", data);
       
       const formattedEvents = data.events.map((event: {
         id: string;
@@ -123,7 +138,7 @@ export default function BookMeeting() {
     } finally {
       setIsLoadingCalendar(false);
     }
-  }, [currentWeekStart]);
+  }, [currentWeekStart, meetingId]);
 
   useEffect(() => {
     fetchOwnerCalendar();
@@ -237,12 +252,69 @@ export default function BookMeeting() {
 
     setIsSubmitting(true);
     try {
-      console.log("Booking meeting:", { ...data, scheduledTime: selectedTimeSlot });
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log("Starting booking process...");
+      console.log("Form data:", data);
+      console.log("Selected time slot:", selectedTimeSlot);
+      console.log("Meeting ID:", meetingId);
+      
+      const bookingData = {
+        meetingId: meetingId as any,
+        attendeeEmail: data.attendeeEmail,
+        attendeeName: data.attendeeName,
+        scheduledTime: selectedTimeSlot,
+        message: data.message || undefined,
+      };
+      
+      console.log("Booking data being sent:", bookingData);
+      
+      const result = await bookSlot(bookingData);
+      
+      console.log("Booking successful:", result);
+      
+      // 予約成功後、カレンダーイベントを作成
+      try {
+        console.log("Creating calendar event...");
+        const calendarResponse = await fetch('/api/calendar/create-event', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            meetingId,
+            bookingId: result,
+            attendeeName: data.attendeeName,
+            attendeeEmail: data.attendeeEmail,
+            scheduledTime: selectedTimeSlot,
+            message: data.message,
+          }),
+        });
+
+        const calendarResult = await calendarResponse.json();
+        console.log("Calendar event result:", calendarResult);
+
+        if (calendarResult.success) {
+          console.log("Calendar event created successfully:", calendarResult.eventId);
+        } else {
+          console.warn("Calendar event creation failed, but booking is still valid:", calendarResult.error);
+          
+          // スコープ不足の場合は特別なメッセージを表示
+          if (calendarResult.requiresReauth) {
+            console.warn("Owner needs to re-authenticate with calendar write permissions");
+          }
+        }
+      } catch (calendarError) {
+        console.error("Calendar event creation error:", calendarError);
+        // カレンダーイベント作成に失敗しても予約は有効
+      }
+      
       setBookingComplete(true);
     } catch (error) {
-      console.error("Error booking meeting:", error);
-      alert("予約に失敗しました。");
+      console.error("Error booking meeting - detailed:", {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      alert(`予約に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -553,6 +625,27 @@ export default function BookMeeting() {
                       <span>ミーティングを予約する</span>
                     </>
                   )}
+                </Button>
+                
+                {/* デバッグ用のテストボタン */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/test-convex');
+                      const data = await response.json();
+                      console.log("Convex test result:", data);
+                      alert(`Convex test: ${data.success ? 'Success' : 'Failed'} - ${JSON.stringify(data)}`);
+                    } catch (error) {
+                      console.error("Convex test error:", error);
+                      alert(`Convex test failed: ${error}`);
+                    }
+                  }}
+                  className="text-xs"
+                >
+                  テスト接続
                 </Button>
                 {isOwner && (
                   <div className="absolute inset-0 cursor-not-allowed" title="自分のミーティングは予約できません" />

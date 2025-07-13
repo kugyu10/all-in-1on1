@@ -1,8 +1,8 @@
 import GoogleProvider from "next-auth/providers/google";
-// import { ConvexHttpClient } from "convex/browser";
-// import { api } from "../../convex/_generated/api";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../convex/_generated/api";
 
-// const convexClient = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+const convexClient = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export const authOptions = {
   providers: [
@@ -12,7 +12,7 @@ export const authOptions = {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         authorization: {
           params: {
-            scope: "openid email profile https://www.googleapis.com/auth/calendar.readonly",
+            scope: "openid email profile https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
             access_type: "offline",
             prompt: "consent"
           },
@@ -23,8 +23,20 @@ export const authOptions = {
   callbacks: {
     // @ts-expect-error NextAuth callback types
     async signIn({ user, account }) {
-      // TODO: Implement Convex user creation on client-side
-      console.log("User signed in:", user, account);
+      try {
+        if (user.email && user.name) {
+          console.log("Saving user to Convex:", user, account);
+          await convexClient.mutation(api.users.upsertUser, {
+            email: user.email,
+            name: user.name,
+            googleId: user.id,
+            profileImage: user.image || undefined,
+            refreshToken: account?.refresh_token || undefined,
+          });
+        }
+      } catch (error) {
+        console.error("Error saving user to Convex:", error);
+      }
       return true;
     },
     // @ts-expect-error NextAuth callback types

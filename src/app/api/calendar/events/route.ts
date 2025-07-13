@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { google } from 'googleapis';
+import { fetchAction, fetchQuery } from 'convex/nextjs';
+import { api } from '../../../../../convex/_generated/api';
 
 interface SessionWithAccessToken {
   accessToken?: string;
@@ -15,32 +17,41 @@ interface SessionWithAccessToken {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as SessionWithAccessToken;
-    
-    console.log("Calendar API - Session check:", {
-      hasSession: !!session,
-      hasAccessToken: !!session?.accessToken,
-      userEmail: session?.user?.email
-    });
-    
-    if (!session) {
-      console.error("Calendar API - No session found");
-      return NextResponse.json({ error: 'No session available' }, { status: 401 });
-    }
-    
-    if (!session?.accessToken) {
-      console.error("Calendar API - No access token in session");
-      return NextResponse.json({ error: 'No access token available' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('start');
     const endDate = searchParams.get('end');
+    const meetingId = searchParams.get('meetingId');
 
     if (!startDate || !endDate) {
       return NextResponse.json({ error: 'Start and end dates are required' }, { status: 400 });
     }
 
+    if (!meetingId) {
+      return NextResponse.json({ error: 'Meeting ID is required' }, { status: 400 });
+    }
+
+    // ミーティング情報とオーナー情報を取得
+    const meeting = await fetchQuery(api.meetings.getById, { meetingId: meetingId as any });
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+    }
+
+    const owner = await fetchQuery(api.users.getById, { id: meeting.ownerId });
+    if (!owner) {
+      return NextResponse.json({ error: 'Meeting owner not found' }, { status: 404 });
+    }
+
+    console.log("Calendar API - Owner info:", {
+      ownerEmail: owner.email,
+      hasRefreshToken: !!owner.refreshToken
+    });
+
+    if (!owner.refreshToken) {
+      console.log("Owner has no refresh token, returning empty events");
+      return NextResponse.json({ events: [] });
+    }
+
+    // オーナーのリフレッシュトークンを使ってアクセストークンを取得
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -48,12 +59,20 @@ export async function GET(request: NextRequest) {
     );
 
     oauth2Client.setCredentials({
-      access_token: session.accessToken,
+      refresh_token: owner.refreshToken,
     });
+
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(credentials);
+    } catch (error) {
+      console.error("Failed to refresh access token:", error);
+      return NextResponse.json({ events: [] });
+    }
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    console.log("Calendar API - Attempting to fetch events:", {
+    console.log("Calendar API - Attempting to fetch owner's events:", {
       calendarId: 'primary',
       timeMin: startDate,
       timeMax: endDate

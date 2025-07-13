@@ -51,20 +51,12 @@ export default function ParticipantsDashboard() {
     <div className="min-h-screen bg-orange-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Users className="h-8 w-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">参加者ダッシュボード</h1>
-                <p className="text-gray-600">ミーティングを検索・予約し、予定を管理</p>
-              </div>
+          <div className="flex items-center space-x-4">
+            <Users className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">参加者ダッシュボード</h1>
+              <p className="text-gray-600">ミーティングを検索・予約し、予定を管理</p>
             </div>
-            <Link href="/owner">
-              <Button variant="outline" className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4" />
-                <span>オーナービューに切り替え</span>
-              </Button>
-            </Link>
           </div>
         </div>
         {/* Stats Cards */}

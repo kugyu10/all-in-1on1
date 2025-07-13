@@ -9,6 +9,7 @@ export const create = mutation({
     profileImage: v.optional(v.string()),
     profileText: v.optional(v.string()),
     isOwner: v.optional(v.boolean()),
+    isAdmin: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const existingUser = await ctx.db
@@ -27,6 +28,7 @@ export const create = mutation({
       profileImage: args.profileImage,
       profileText: args.profileText || "",
       isOwner: args.isOwner || false,
+      isAdmin: args.isAdmin || false,
       createdAt: Date.now(),
     });
   },
@@ -84,6 +86,7 @@ export const upsertUser = mutation({
     name: v.string(),
     googleId: v.optional(v.string()),
     profileImage: v.optional(v.string()),
+    refreshToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existingUser = await ctx.db
@@ -93,11 +96,18 @@ export const upsertUser = mutation({
 
     if (existingUser) {
       // Update existing user
-      await ctx.db.patch(existingUser._id, {
+      const updateData: Record<string, any> = {
         name: args.name,
         googleId: args.googleId,
         profileImage: args.profileImage,
-      });
+      };
+      
+      // refreshTokenが提供された場合のみ更新
+      if (args.refreshToken) {
+        updateData.refreshToken = args.refreshToken;
+      }
+      
+      await ctx.db.patch(existingUser._id, updateData);
       return existingUser._id;
     } else {
       // Create new user
@@ -108,8 +118,42 @@ export const upsertUser = mutation({
         profileImage: args.profileImage,
         profileText: "",
         isOwner: false,
+        isAdmin: false,
+        refreshToken: args.refreshToken,
         createdAt: Date.now(),
       });
     }
+  },
+});
+
+// 管理者用API
+export const getAllUsers = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("users").collect();
+  },
+});
+
+export const updateUserRole = mutation({
+  args: {
+    userId: v.id("users"),
+    isOwner: v.optional(v.boolean()),
+    isAdmin: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const updateData: Record<string, any> = {};
+    
+    if (args.isOwner !== undefined) updateData.isOwner = args.isOwner;
+    if (args.isAdmin !== undefined) updateData.isAdmin = args.isAdmin;
+
+    return await ctx.db.patch(args.userId, updateData);
+  },
+});
+
+export const deleteUser = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.delete(args.userId);
   },
 });

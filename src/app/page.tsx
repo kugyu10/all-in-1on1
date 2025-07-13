@@ -14,25 +14,9 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <div className="flex items-center mb-4">
-              <Calendar className="h-8 w-8 text-orange-600 mr-3" />
-              <h2 className="text-2xl font-semibold text-gray-900">ミーティング主催者向け</h2>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Googleカレンダーを連携し、空き時間を設定して、他の人がスムーズにミーティングを予約できるようにしましょう。
-            </p>
-            <Link 
-              href="/owner" 
-              className="inline-block bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 transition-colors"
-            >
-オーナーとして始める
-            </Link>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <div className="flex items-center mb-4">
+        <div className="max-w-2xl mx-auto mb-16">
+          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+            <div className="flex items-center justify-center mb-4">
               <Users className="h-8 w-8 text-orange-500 mr-3" />
               <h2 className="text-2xl font-semibold text-gray-900">参加者向け</h2>
             </div>

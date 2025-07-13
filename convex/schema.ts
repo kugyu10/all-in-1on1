@@ -9,6 +9,8 @@ export default defineSchema({
     profileImage: v.optional(v.string()),
     profileText: v.optional(v.string()),
     isOwner: v.boolean(),
+    isAdmin: v.optional(v.boolean()),
+    refreshToken: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_email", ["email"]).index("by_googleId", ["googleId"]),
 
@@ -71,6 +73,8 @@ export default defineSchema({
     scheduledTime: v.number(),
     status: v.union(v.literal("scheduled"), v.literal("cancelled"), v.literal("completed")),
     meetingLink: v.optional(v.string()),
+    message: v.optional(v.string()),
+    calendarEventId: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_meeting", ["meetingId"]).index("by_attendee", ["attendeeEmail"]),
 
@@ -82,4 +86,15 @@ export default defineSchema({
     expiresAt: v.number(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  invitationTokens: defineTable({
+    token: v.string(),
+    email: v.optional(v.string()), // 特定のメールアドレス用の招待の場合
+    role: v.union(v.literal("owner"), v.literal("admin")),
+    usedBy: v.optional(v.id("users")),
+    isUsed: v.boolean(),
+    expiresAt: v.number(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_token", ["token"]).index("by_email", ["email"]),
 });

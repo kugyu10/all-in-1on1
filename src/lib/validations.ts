@@ -53,7 +53,6 @@ export const bookMeetingSchema = z.object({
   meetingId: z.string().min(1, "Meeting ID is required"),
   attendeeName: z.string().min(1, "Name is required").max(50, "Name must be less than 50 characters"),
   attendeeEmail: z.string().email("Invalid email address"),
-  scheduledTime: z.number().min(1, "Time slot is required"),
   message: z.string().optional(),
 });
 

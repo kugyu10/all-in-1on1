@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-// import { useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery } from "convex/react";
@@ -10,12 +10,12 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createMeetingSchema, CreateMeetingInput } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
-import { Calendar, Video, ArrowLeft, CheckCircle } from "lucide-react";
+import { Calendar, Video, ArrowLeft, CheckCircle, Shield } from "lucide-react";
 import Link from "next/link";
 
 export default function CreateMeeting() {
-  const { data: session } = useSession();
-  // const router = useRouter();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState<{ id: string; summary: string; start: { dateTime: string }; end: { dateTime: string } }[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
@@ -27,6 +27,20 @@ export default function CreateMeeting() {
     api.users.getByEmail,
     session?.user?.email ? { email: session.user.email } : "skip"
   );
+
+  useEffect(() => {
+    if (status === "loading") return;
+    
+    if (!session) {
+      router.push("/auth/signin");
+      return;
+    }
+    
+    if (currentUser && !currentUser.isOwner) {
+      router.push("/");
+      return;
+    }
+  }, [session, status, currentUser, router]);
 
   const {
     register,
@@ -106,6 +120,40 @@ export default function CreateMeeting() {
       fetchCalendarData();
     }
   }, [session]);
+
+  if (status === "loading" || !currentUser) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">認証中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser.isOwner) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-red-600 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">アクセス拒否</h1>
+          <p className="text-gray-600 mb-6">オーナー権限が必要です。</p>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">
+              オーナーになるには、管理者からの招待が必要です。
+            </p>
+            <Button
+              onClick={() => router.push("/")}
+              variant="outline"
+            >
+              ホームに戻る
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50">
